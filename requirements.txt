@@ -1,0 +1,17 @@
+# Government Submission Bot - Python Dependencies
+
+# Core
+python-dotenv>=1.0.0
+
+# Document Processing
+pdfminer.six>=20260107
+python-docx>=1.2.0
+
+# AI/ML
+anthropic>=0.77.0
+
+# HTTP Requests
+httpx>=0.28.0
+
+# String Matching (for evidence validation)
+RapidFuzz>=3.14.0

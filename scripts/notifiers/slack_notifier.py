@@ -1,0 +1,179 @@
+"""Slack webhook notifier"""
+
+import logging
+from typing import List, Optional
+import httpx
+
+from ..models.bundle import BundleInfo
+
+
+class SlackNotifier:
+    """Send notifications via Slack webhook"""
+
+    def __init__(self, webhook_url: str, logger: Optional[logging.Logger] = None):
+        self.webhook_url = webhook_url
+        self.logger = logger or logging.getLogger(__name__)
+
+    def send_pipeline_complete(
+        self,
+        bundles: List[BundleInfo],
+        errors: List[str],
+        duration: float
+    ):
+        """
+        Send rich Slack message for pipeline completion
+
+        Args:
+            bundles: List of generated bundles
+            errors: List of error messages
+            duration: Pipeline duration in seconds
+        """
+        try:
+            # Build message
+            message = self._build_message(bundles, errors, duration)
+
+            # Send to Slack
+            response = httpx.post(
+                self.webhook_url,
+                json=message,
+                timeout=10.0
+            )
+            response.raise_for_status()
+
+            self.logger.info("Slack notification sent successfully")
+
+        except httpx.HTTPError as e:
+            self.logger.warning(f"Failed to send Slack notification: {e}")
+            # Don't fail the pipeline if Slack fails
+        except Exception as e:
+            self.logger.warning(f"Unexpected error sending Slack notification: {e}")
+
+    def send_error(self, error_message: str):
+        """
+        Send error notification
+
+        Args:
+            error_message: Error description
+        """
+        try:
+            message = {
+                "text": "Pipeline Error",
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "❌ Gov Submission Pipeline Error"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Error:*\n{error_message}"
+                        }
+                    }
+                ]
+            }
+
+            response = httpx.post(
+                self.webhook_url,
+                json=message,
+                timeout=10.0
+            )
+            response.raise_for_status()
+
+            self.logger.info("Slack error notification sent")
+
+        except Exception as e:
+            self.logger.warning(f"Failed to send error notification: {e}")
+
+    def _build_message(
+        self,
+        bundles: List[BundleInfo],
+        errors: List[str],
+        duration: float
+    ) -> dict:
+        """Build Slack message with blocks"""
+        # Determine overall status
+        if errors:
+            status_emoji = "⚠️"
+            status_text = "Complete with Errors"
+        else:
+            status_emoji = "✅"
+            status_text = "Complete"
+
+        blocks = []
+
+        # Header
+        blocks.append({
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{status_emoji} Gov Submission Pipeline {status_text}"
+            }
+        })
+
+        # Summary
+        summary_text = (
+            f"*Processed:* {len(bundles)} candidate-opportunity pairs\n"
+            f"*Duration:* {duration:.1f} seconds\n"
+            f"*Errors:* {len(errors)}"
+        )
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": summary_text
+            }
+        })
+
+        # Output bundles
+        if bundles:
+            bundles_text = "*Output Bundles:*\n"
+            for bundle in bundles:
+                bundles_text += f"• `{bundle.output_path}` ({bundle.match_percentage:.1f}% match)\n"
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": bundles_text
+                }
+            })
+
+        # Errors/Missing items
+        if errors:
+            errors_text = "*Issues:*\n"
+            for error in errors[:10]:  # Limit to 10 errors
+                errors_text += f"• {error}\n"
+
+            if len(errors) > 10:
+                errors_text += f"• ... and {len(errors) - 10} more errors\n"
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": errors_text
+                }
+            })
+
+        # Divider
+        blocks.append({"type": "divider"})
+
+        # Footer
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Generated by Gov Submission Bot"
+                }
+            ]
+        })
+
+        return {
+            "text": f"Pipeline {status_text}",
+            "blocks": blocks
+        }

@@ -1,0 +1,17 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+logs/
+*.log
+# real documents and generated output never get committed
+inbox/*
+resumes/*
+opps/*
+outputs/*
+!inbox/.gitkeep
+!resumes/.gitkeep
+!opps/.gitkeep
+!outputs/.gitkeep
